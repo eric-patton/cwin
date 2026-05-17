@@ -1,0 +1,21 @@
+# Visual Studio / Rider artifacts
+.vs/
+.idea/
+*.user
+obj/
+bin/
+
+# Windows shell noise
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Editor swap files
+*.swp
+*~
+
+# PowerShell module data
+*.psd1.bak
+
+# Smoke test outputs land in %TEMP%, but in case anyone redirects them locally:
+cwin-smoke-*/
