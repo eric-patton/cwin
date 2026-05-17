@@ -235,6 +235,9 @@ namespace Cwin {
         public static extern IntPtr GetParent(IntPtr hwnd);
 
         [DllImport("user32.dll")]
+        public static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
+        [DllImport("user32.dll")]
         public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -558,10 +561,23 @@ namespace Cwin {
         public static void PostClick(IntPtr topHwnd, int x, int y, string button, bool doubleClick) {
             Native.POINT scr = new Native.POINT { X = x, Y = y };
             Native.ClientToScreen(topHwnd, ref scr);
-            IntPtr target = Native.WindowFromPoint(scr);
-            if (target == IntPtr.Zero) target = topHwnd;
-            Native.POINT local = scr;
-            Native.ScreenToClient(target, ref local);
+
+            // WindowFromPoint is Z-order sensitive — if our window is buried
+            // (e.g. after `cwin background`, or simply behind the user's other
+            // apps), it returns some other process's HWND at that screen point
+            // and our PostMessage goes to the wrong window. Only trust the
+            // descendant if it's actually ours.
+            IntPtr resolved = Native.WindowFromPoint(scr);
+            IntPtr target;
+            Native.POINT local;
+            if (resolved != IntPtr.Zero && (resolved == topHwnd || Native.IsChild(topHwnd, resolved))) {
+                target = resolved;
+                local = scr;
+                Native.ScreenToClient(target, ref local);
+            } else {
+                target = topHwnd;
+                local = new Native.POINT { X = x, Y = y };
+            }
 
             uint downMsg, upMsg, dblMsg, downBtn;
             switch (button) {

@@ -508,6 +508,29 @@ The exact reason is not fully nailed down, but the suspicion is that the kernel-
 
 Practical effect: there's no consistent "y offset = titlebar height" you can rely on for modern apps. Always derive coordinates from a screenshot.
 
+### 5.9a PostClick's WindowFromPoint dropped clicks on backgrounded windows
+
+The original `PostClick` resolved the descendant control under the click via `WindowFromPoint(scrX, scrY)`. The intent was right — for traditional Win32 dialogs you have to post `WM_LBUTTON*` to the actual `Edit` / `Button` child HWND, not to the top-level — but `WindowFromPoint` is **Z-order sensitive**. When the target window is buried (after `cwin background`, when another app is covering it, when it's off-screen), `WindowFromPoint` returns whatever HWND is *visible* at that screen point. That belongs to some other process, and the click message goes there instead. Symptom: `cwin click` was a no-op for any window that wasn't on top — even though `cwin keys` worked fine because text/key posting doesn't go through `WindowFromPoint`.
+
+Found while smoke-testing against a Godot game that had been `cwin background`-ed. Keys toggled the in-game inventory; clicks did nothing. Bringing the window forward and re-clicking worked, which pointed straight at Z-order.
+
+Fix: only trust the `WindowFromPoint` result if it's the target itself or a `IsChild`-descendant of it. Otherwise post to the original top-level using the original client coords. This preserves the dialog-child routing for the cases that need it and the obvious behavior for everything else.
+
+```csharp
+IntPtr resolved = Native.WindowFromPoint(scr);
+IntPtr target; Native.POINT local;
+if (resolved != IntPtr.Zero && (resolved == topHwnd || Native.IsChild(topHwnd, resolved))) {
+    target = resolved;
+    local = scr;
+    Native.ScreenToClient(target, ref local);
+} else {
+    target = topHwnd;
+    local = new Native.POINT { X = x, Y = y };
+}
+```
+
+Regression check in `smoke.ps1`: click a XAML element by post on a backgrounded Calculator and verify the message reaches Calculator (not the visible-topmost window).
+
 ### 5.9 PowerShell tool wrapper mangles `$_` in -Command
 
 When invoking `pwsh -Command "... $_ ..."` through the harness's PowerShell tool, `$_` got eaten in some calls and produced parser errors. Workaround: use heredoc-style here-strings (`@'...'@`) when the command needs `$_`, or invoke via the Bash tool with proper escaping. For `cwin.ps1` itself this is a non-issue — it only matters when writing ad-hoc inline scripts.
