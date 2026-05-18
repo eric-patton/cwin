@@ -226,6 +226,28 @@ public static System.IntPtr Get() { return GetForegroundWindow(); }
             [void][S.FgHelper]::GetCursorPos([ref]$pt)
             if ($pt.X -eq 50 -and $pt.Y -eq 50) { throw "cursor still at (50,50) — --keep-cursor was ignored" }
         }
+        Check "click --method input restores prior foreground by default" {
+            # Park focus on the smoke-test host window, click Calculator with
+            # --method input, then verify the host window is foreground again.
+            Invoke-Cwin foreground --hwnd $hwndArg | Out-Null
+            Start-Sleep -Milliseconds 250
+            Invoke-Cwin click --title Calculator --x 65 --y 489 --method input | Out-Null
+            Start-Sleep -Milliseconds 300
+            $fg = [int64][S.FgHelper]::Get()
+            if ($fg -ne [int64]$hwndArg) {
+                throw "expected fg=$hwndArg, got $fg"
+            }
+        }
+        Check "click --method input --keep-foreground leaves the click target foreground" {
+            Invoke-Cwin foreground --hwnd $hwndArg | Out-Null
+            Start-Sleep -Milliseconds 250
+            Invoke-Cwin click --title Calculator --x 65 --y 489 --method input --keep-foreground | Out-Null
+            Start-Sleep -Milliseconds 300
+            $fg = [int64][S.FgHelper]::Get()
+            if ($fg -eq [int64]$hwndArg) {
+                throw "fg still on host window — --keep-foreground was ignored"
+            }
+        }
     } finally {
         Start-Sleep -Milliseconds 300
         $calcProc | Stop-Process -Force -ErrorAction SilentlyContinue

@@ -7,7 +7,8 @@ function Invoke-CwinSubcommand {
         [string]$Class,
         [Parameter(Mandatory)][string]$Key,
         [string]$Mods,
-        [ValidateSet('auto','post','input')][string]$Method = 'auto'
+        [ValidateSet('auto','post','input')][string]$Method = 'auto',
+        [switch]${keep-foreground}
     )
     $hw = $null
     if ($Hwnd) {
@@ -64,11 +65,16 @@ function Invoke-CwinSubcommand {
     } else {
         # SendInput requires the target to be foreground. Skip the bring-forward
         # round trip entirely when we're already there.
+        $prevForeground = [IntPtr]::Zero
         $current = [Cwin.Native]::GetForegroundWindow()
         if ($current -ne $handle) {
+            $prevForeground = $current
             [void](Set-CwinForeground -Hwnd $w.Hwnd)
             Start-Sleep -Milliseconds 200
         }
         [Cwin.Input]::SendInputKey([uint16]$vk, $modArr)
+        if ($prevForeground -ne [IntPtr]::Zero -and -not ${keep-foreground}) {
+            [void](Set-CwinForeground -Hwnd ([int64]$prevForeground))
+        }
     }
 }

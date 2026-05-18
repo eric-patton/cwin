@@ -99,7 +99,8 @@ EXAMPLE
 $script:CwinHelp['click'] = @'
 cwin click <selector> (--x N --y N | --uia-name <s> | --uia-id <s>)
                      [--button left|right|middle] [--double]
-                     [--method auto|post|input|uia] [--keep-cursor]
+                     [--method auto|post|input|uia]
+                     [--keep-cursor] [--keep-foreground]
 
 Click inside a window. Two element-resolution modes:
   coords (--x, --y)        target the descendant under those client coords
@@ -112,20 +113,21 @@ METHOD
   post   PostMessage WM_LBUTTON* — background, but ignored by XAML.
   uia    UI Automation Invoke/Toggle/SelectionItem/ExpandCollapse.
          No focus shift, no cursor movement, works on XAML.
-  input  SendInput — steals focus AND moves the cursor. By default cwin
-         snapshots the cursor before, and snaps it back after. Pass
-         --keep-cursor to leave the pointer where the click happened.
+  input  SendInput — must briefly steal focus to inject. By default cwin
+         snapshots the cursor and the previous foreground window, then
+         restores both after the click. Pass --keep-cursor / --keep-foreground
+         to leave the pointer or the focus on the click target instead.
 
 EXAMPLES
   cwin click --title Calculator --uia-id num7Button           # background
   cwin click --title MyApp --x 220 --y 90                     # post path
   cwin click --title Notepad --uia-name "Save" --method uia   # explicit
-  cwin click --title MyApp --x 50 --y 50 --method input       # restores cursor
+  cwin click --title MyApp --x 50 --y 50 --method input       # restores fg+cursor
 '@
 
 $script:CwinHelp['keys'] = @'
 cwin keys <selector> --text "..." [--uia-name <s> | --uia-id <s>]
-                     [--method auto|post|input|uia]
+                     [--method auto|post|input|uia] [--keep-foreground]
 
 Type a string into the window.
 
@@ -136,7 +138,9 @@ METHOD
          Ignored by XAML/WinUI/UWP text inputs.
   uia    ValuePattern.SetValue on the target element. REPLACES the field's
          contents in one call (not append). No focus shift.
-  input  SendInput KEYEVENTF_UNICODE — steals focus.
+  input  SendInput KEYEVENTF_UNICODE — must briefly steal focus to inject.
+         By default cwin restores the previous foreground window after; pass
+         --keep-foreground to leave focus on the click target instead.
 
 For control keys / chords use `cwin key` instead.
 
@@ -146,7 +150,8 @@ EXAMPLES
 '@
 
 $script:CwinHelp['key'] = @'
-cwin key <selector> --key <NAME> [--mods Ctrl,Shift,Alt,Win] [--method post|input]
+cwin key <selector> --key <NAME> [--mods Ctrl,Shift,Alt,Win]
+                    [--method post|input] [--keep-foreground]
 
 Send a single key (optionally with modifiers).
 
@@ -163,6 +168,8 @@ METHOD
   post  WM_KEYDOWN/UP, or WM_SYSKEYDOWN/UP if Alt is in --mods.
   input SendInput. Use this when chords fail (some apps poll
         GetAsyncKeyState; PostMessage cannot update that state).
+        Must briefly steal focus to inject; by default cwin restores the
+        previous foreground window after — pass --keep-foreground to opt out.
 
 EXAMPLES
   cwin key --title "Notepad" --key S --mods Ctrl       # Ctrl+S

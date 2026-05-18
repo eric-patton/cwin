@@ -23,13 +23,13 @@ When a person and an LLM iterate on UI work — a WPF app, a Godot game, a web f
 
 That constraint forces a layered strategy:
 
-| layer       | API                  | works on                                              | steals focus? |
-|-------------|----------------------|-------------------------------------------------------|---------------|
-| **post**    | `PostMessage`        | Win32, WPF, WinForms, Chromium/Electron               | no            |
-| **uia**     | UI Automation        | XAML/WinUI/UWP, WPF, Chromium/Electron, and more      | no            |
-| **input**   | `SendInput`          | everything that accepts real keyboard/mouse input     | **yes**       |
+| layer       | API                  | works on                                              | steals focus?    |
+|-------------|----------------------|-------------------------------------------------------|------------------|
+| **post**    | `PostMessage`        | Win32, WPF, WinForms, Chromium/Electron               | no               |
+| **uia**     | UI Automation        | XAML/WinUI/UWP, WPF, Chromium/Electron, and more      | no               |
+| **input**   | `SendInput`          | everything that accepts real keyboard/mouse input     | briefly, then restored |
 
-`--method auto` (the default for click/keys/key) picks `post` or `uia` per window class so you almost never need `input`. The few cases where you do — modifier chords like Ctrl+S, apps that don't expose UIA — get extra polish: cwin skips the 200 ms foreground-settle when the target is already in front, and restores the cursor to where it was before the click.
+`--method auto` (the default for click/keys/key) picks `post` or `uia` per window class so you almost never need `input`. The few cases where you do — modifier chords like Ctrl+S, apps that don't expose UIA, Flutter desktop windows — get extra polish: cwin skips the 200 ms foreground-settle when the target is already in front, restores the cursor to where it was before the click, and **restores the previously-foreground window after the input completes** so focus lands back where the user left it.
 
 ## Install
 
@@ -129,10 +129,11 @@ For clicks from coordinates the search walks up to the nearest invokable ancesto
 
 ### `--method input` — SendInput (universal fallback)
 
-Real system-level input. Reliable for almost everything but **steals focus** and moves the cursor. cwin pre-brings the target to foreground (using the `AttachThreadInput` trick to bypass Windows' foreground-lock heuristics) and waits 200 ms before injecting — empirically the minimum settle time for `KEYEVENTF_UNICODE` text. Two small kindnesses:
+Real system-level input. Reliable for almost everything but **briefly takes focus** and moves the cursor. cwin pre-brings the target to foreground (using the `AttachThreadInput` trick to bypass Windows' foreground-lock heuristics) and waits 200 ms before injecting — empirically the minimum settle time for `KEYEVENTF_UNICODE` text. Three small kindnesses:
 
 - The 200 ms wait is **skipped** if `GetForegroundWindow() == target` already.
 - For `click --method input`, the cursor is **snapshotted before and restored after** by default. Pass `--keep-cursor` to leave it at the click point.
+- The previous foreground window is **restored after the input completes**, so the call doesn't park focus on the click target. Works for `click`, `key`, and `keys`. Pass `--keep-foreground` to opt out when chaining more input into the same target.
 
 ### `--method auto` for `shot`
 

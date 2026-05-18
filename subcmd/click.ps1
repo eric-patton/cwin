@@ -12,7 +12,8 @@ function Invoke-CwinSubcommand {
         [ValidateSet('left','right','middle')][string]$Button = 'left',
         [switch]$Double,
         [ValidateSet('auto','post','input','uia')][string]$Method = 'auto',
-        [switch]${keep-cursor}
+        [switch]${keep-cursor},
+        [switch]${keep-foreground}
     )
     $hw = $null
     if ($Hwnd) {
@@ -92,8 +93,10 @@ function Invoke-CwinSubcommand {
         'input' {
             # SendInput requires the target to be foreground. Skip the bring-forward
             # round trip entirely when we're already there.
+            $prevForeground = [IntPtr]::Zero
             $current = [Cwin.Native]::GetForegroundWindow()
             if ($current -ne $handle) {
+                $prevForeground = $current
                 [void](Set-CwinForeground -Hwnd $w.Hwnd)
                 Start-Sleep -Milliseconds 200
             }
@@ -110,6 +113,12 @@ function Invoke-CwinSubcommand {
 
             if ($cursorOk -and -not ${keep-cursor}) {
                 [void][Cwin.Native]::SetCursorPos([int]$origCursor.X, [int]$origCursor.Y)
+            }
+            # Restore the foreground window we displaced. Best-effort: if the
+            # previous window was destroyed during the click, Set-CwinForeground
+            # returns false silently.
+            if ($prevForeground -ne [IntPtr]::Zero -and -not ${keep-foreground}) {
+                [void](Set-CwinForeground -Hwnd ([int64]$prevForeground))
             }
             return
         }

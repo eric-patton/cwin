@@ -287,6 +287,8 @@ Attaching the input queues briefly merges them, which lets `SetForegroundWindow`
 
 After bringing the target forward we wait **200 ms** before `SendInput`. The exact number was found empirically (see §5.7); 80 ms was not enough for KEYEVENTF_UNICODE text.
 
+After the input completes, we restore the foreground window the call displaced. The bring-forward step snapshots `GetForegroundWindow()` before activating the target; once `SendInput` returns we feed that HWND back through `Set-CwinForeground`. This keeps `--method input` from leaving focus parked on the click target — the rest of the tool's design is "background where possible," and one-shot input calls should not violate that. The opt-out is `--keep-foreground`, useful when you're about to chain more input into the same target window.
+
 ### 4.10 UAC mismatch detection
 
 A non-elevated `cwin` cannot post messages to a higher-integrity (elevated) target — UIPI silently drops the message and `PostMessage` returns success anyway. To stop the user from staring at a no-op, before each `--method post` operation we compare token integrity levels:

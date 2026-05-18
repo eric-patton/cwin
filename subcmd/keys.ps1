@@ -8,7 +8,8 @@ function Invoke-CwinSubcommand {
         [Parameter(Mandatory)][string]$Text,
         [string]${uia-name},
         [string]${uia-id},
-        [ValidateSet('auto','post','input','uia')][string]$Method = 'auto'
+        [ValidateSet('auto','post','input','uia')][string]$Method = 'auto',
+        [switch]${keep-foreground}
     )
     $hw = $null
     if ($Hwnd) {
@@ -65,12 +66,17 @@ function Invoke-CwinSubcommand {
             return
         }
         'input' {
+            $prevForeground = [IntPtr]::Zero
             $current = [Cwin.Native]::GetForegroundWindow()
             if ($current -ne $handle) {
+                $prevForeground = $current
                 [void](Set-CwinForeground -Hwnd $w.Hwnd)
                 Start-Sleep -Milliseconds 200
             }
             [Cwin.Input]::SendInputText($Text)
+            if ($prevForeground -ne [IntPtr]::Zero -and -not ${keep-foreground}) {
+                [void](Set-CwinForeground -Hwnd ([int64]$prevForeground))
+            }
             return
         }
     }
