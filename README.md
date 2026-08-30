@@ -198,6 +198,8 @@ subcmd/
   foreground.ps1   background.ps1   restore.ps1
 test/
   smoke.ps1                    # dispatcher + Win32 + UIA + placement regression checks
+scripts/
+  record-demo.ps1              # records the two-pane demo capture (see Demo)
 DESIGN.md                      # the *why* behind every nontrivial decision
 ```
 
@@ -210,6 +212,31 @@ pwsh -NoProfile -File test\smoke.ps1
 ```
 
 22 checks covering dispatcher behavior, exit codes, JSON output, shot pipeline, the UIA paths, placement (`--anchor`, `--monitor`, `monitors`, `background`), and cursor restore. Most checks run against whatever windows are open; a few launch Calculator briefly to exercise the XAML/UIA paths and clean up after themselves.
+
+## Demo
+
+What cwin does is hard to screenshot, because the claim is a negative: the target app changes and
+your focus never moves. A single window cannot show that, so the demo records two panes at once.
+
+```pwsh
+pwsh -NoProfile -File scriptsecord-demo.ps1
+```
+
+The terminal you run it from becomes the left pane. It opens a throwaway-profile Chrome on a
+public TodoMVC demo as the right pane, reads the page's accessibility tree, types three todos into
+it, ticks one by accessible name, and records the whole thing with ffmpeg into
+`docs/images/demo.gif`. Needs ffmpeg and Chrome on PATH. Leave the mouse and keyboard alone while
+it runs, and note it occupies the screen for about 45 seconds.
+
+Three tells are visible in every frame, and together they are the whole argument:
+
+1. **Chrome's title bar stays greyed.** It is never the foreground window.
+2. **The cursor never moves.** Nothing in the sequence uses SendInput.
+3. **The terminal keeps the caret** and its output scrolls while the browser reacts.
+
+Nothing is staged: each command printed in the left pane is the command that then runs. The script
+also cleans up after itself, closing the browser by window handle rather than by process, for the
+reason in [DESIGN.md](DESIGN.md) about shared-process hosts.
 
 ## Design notes
 

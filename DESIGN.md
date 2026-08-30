@@ -147,6 +147,25 @@ Scriptable; the smoke test asserts these.
 
 This section lives here so the next person who touches this code does not have to rediscover the gotchas.
 
+### 4.0 Close windows by handle, never by process
+
+cwin has no `close` verb on purpose, but anything that automates windows eventually wants to shut
+one, and the obvious reach is `taskkill`. It is the wrong tool, and the failure is quiet until it
+is catastrophic.
+
+`taskkill` terminates **processes**. Windows Terminal, and every Chromium browser and Electron
+app, hosts many windows in one process. Killing that PID to close one window takes every other
+window with it, which in practice means the terminal the operator is working in.
+
+The `/FI "WINDOWTITLE eq ..."` filter reads like it narrows the kill to one window. It does not.
+It only decides *whether* taskkill fires against the PID at all. If any window in the process
+matches, the whole process dies.
+
+Close one window by posting `WM_CLOSE` (0x0010) to its handle, via `SendMessageTimeout` with
+`SMTO_ABORTIFHUNG` so a wedged app cannot block the caller. `scriptsecord-demo.ps1` does exactly
+this to shut the browser it opened. If a process must be killed, first check with `cwin list`
+whether it owns more than one window.
+
 ### 4.1 DPI awareness
 
 ```csharp
