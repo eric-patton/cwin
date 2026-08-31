@@ -249,6 +249,10 @@ high-DPI display: GitHub renders a README image at roughly 900 CSS pixels and do
 Pass `-Width 1900` for a 1:1 capture, or lower `-Fps` to buy the file size back. Keep it
 under about 5 MB, because most people who open a README are on a phone.
 
+`-TrimStart <seconds>` drops frames off the front. A fresh recording should not need it:
+the terminal is cleared and the title card painted before capture begins, so the operator's
+own paths never reach the first frame.
+
 `-KeepVideo` writes the intermediate `demo.mp4` beside the GIF, which is worth doing on the
 first take: retuning the width afterwards then costs one command instead of another 45
 seconds of your screen.

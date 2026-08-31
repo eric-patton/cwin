@@ -25,6 +25,10 @@
 .PARAMETER Fps
   Frames per second in the GIF. Lower it to buy file size back after raising -Width.
 
+.PARAMETER TrimStart
+  Seconds to drop from the front. A fresh recording needs none, because the terminal is
+  cleared before capture starts. Kept for re-encoding older captures that caught the setup.
+
 .PARAMETER KeepVideo
   Keep the intermediate .mp4 next to the GIF. Worth passing on the first take, because
   -FromVideo can then re-encode it at another width without occupying the screen again.
@@ -47,6 +51,7 @@ param(
     [string]$OutFile,
     [ValidateRange(320, 3840)][int]$Width = 1400,
     [ValidateRange(4, 30)][int]$Fps = 10,
+    [ValidateRange(0, 60)][double]$TrimStart = 0,
     [switch]$KeepVideo,
     [string]$FromVideo
 )
@@ -101,13 +106,17 @@ function Type-Line {
 }
 
 function Convert-ToGif {
-    param([string]$Source, [string]$Destination, [int]$W, [int]$F)
+    param([string]$Source, [string]$Destination, [int]$W, [int]$F, [double]$Skip = 0)
     New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
     # stats_mode=diff builds the palette from what actually changes between frames, which is what
     # keeps the terminal text readable instead of spending the 256 colours on static background.
     $filter = "fps=$F,scale=${W}:-1:flags=lanczos,split[a][b];" +
               '[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3'
-    & ffmpeg -y -loglevel error -i $Source -vf $filter $Destination
+    # -ss ahead of -i seeks before decoding, which is what keeps this fast.
+    $ffArgs = @('-y', '-loglevel', 'error')
+    if ($Skip -gt 0) { $ffArgs += @('-ss', $Skip) }
+    $ffArgs += @('-i', $Source, '-vf', $filter, $Destination)
+    & ffmpeg @ffArgs
     if ($LASTEXITCODE -ne 0) { throw 'ffmpeg failed to convert the capture to a GIF.' }
     $item = Get-Item $Destination
     $size = [math]::Round($item.Length / 1MB, 2)
@@ -126,7 +135,7 @@ Require-Command 'cwin'   'Add cwin to PATH, or run this from a shell that resolv
 if ($FromVideo) {
     if (-not (Test-Path $FromVideo)) { throw "No such capture: $FromVideo" }
     if (-not $OutFile) { $OutFile = Join-Path $repo 'docs/images/demo.gif' }
-    Convert-ToGif -Source (Resolve-Path $FromVideo) -Destination $OutFile -W $Width -F $Fps
+    Convert-ToGif -Source (Resolve-Path $FromVideo) -Destination $OutFile -W $Width -F $Fps -Skip $TrimStart
     return
 }
 
@@ -188,6 +197,17 @@ try {
     & cwin pos --hwnd $chrome --x $right.X --y $right.Y --w $right.W --h $right.H | Out-Null
     Start-Sleep -Seconds 2
 
+    # Clear the staging chatter and paint the title card BEFORE recording starts. gdigrab takes a
+    # moment to come up, so anything on screen at that point lands in the first frames; leaving
+    # the prompt and the "positioning panes" warning there would put the operator's own paths and
+    # a setup message at the front of the GIF.
+    Clear-Host
+    Write-Host ''
+    Write-Host '  cwin' -NoNewline -ForegroundColor Cyan
+    Write-Host ' drives the browser on the right.' -ForegroundColor Gray
+    Write-Host '  Chrome never takes focus. The mouse never moves.' -ForegroundColor DarkGray
+    Write-Host ''
+
     # Recording runs with a fixed duration so it stops on its own; nothing has to kill it.
     $take = 42
     $ffmpeg = Start-Process -FilePath 'ffmpeg' -PassThru -WindowStyle Hidden -ArgumentList @(
@@ -197,15 +217,8 @@ try {
         '-i', 'desktop', '-t', $take
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', $video
     )
-    Start-Sleep -Seconds 2
-
-    Clear-Host
-    Write-Host ''
-    Write-Host '  cwin' -NoNewline -ForegroundColor Cyan
-    Write-Host ' drives the browser on the right.' -ForegroundColor Gray
-    Write-Host '  Chrome never takes focus. The mouse never moves.' -ForegroundColor DarkGray
-    Write-Host ''
-    Start-Sleep -Milliseconds 1800
+    # Long enough for gdigrab to be capturing before the first command is typed.
+    Start-Sleep -Seconds 3
 
     # 1. Read the page. Depth matters: the default depth only reaches browser chrome, and the
     #    web content lives well below it.
@@ -257,7 +270,7 @@ try {
     }
 
     Write-Host '  Converting to GIF...' -ForegroundColor DarkGray
-    Convert-ToGif -Source $video -Destination $OutFile -W $Width -F $Fps
+    Convert-ToGif -Source $video -Destination $OutFile -W $Width -F $Fps -Skip $TrimStart
 }
 finally {
     if ($ffmpeg -and -not $ffmpeg.HasExited) { $ffmpeg.Kill() }
