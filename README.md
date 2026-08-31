@@ -2,6 +2,12 @@
 
 A small Windows CLI that lets you (or an LLM coding agent like Claude Code) drive **any** visible window on a Windows 11 machine — screenshot it, click in it, send keys to it, resize and move it — **without stealing focus** in the common case. Built so an interactive session can have the agent iterate on a UI in one window while you keep working in another.
 
+![cwin driving Chrome from a terminal: the accessibility tree is dumped, three todos are typed into the page and one is ticked by accessible name, while Chrome's title bar stays greyed and the mouse cursor never moves](docs/images/demo.gif)
+
+*The terminal keeps focus throughout. Chrome's title bar stays greyed because it never comes to the
+front, and the cursor never moves: nothing in that sequence uses `SendInput`. Recorded by
+[`scripts/record-demo.ps1`](scripts/record-demo.ps1), which is in the repo so you can run it yourself.*
+
 ```pwsh
 cwin list
 cwin shot   --title "MyApp" --out shot.png

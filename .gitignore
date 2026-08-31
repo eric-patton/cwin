@@ -19,3 +19,7 @@ $RECYCLE.BIN/
 
 # Smoke test outputs land in %TEMP%, but in case anyone redirects them locally:
 cwin-smoke-*/
+
+# Intermediate capture from scripts/record-demo.ps1 -KeepVideo. Useful locally for re-encoding
+# the GIF at a different width without re-recording; no reason to ship it.
+docs/images/*.mp4
