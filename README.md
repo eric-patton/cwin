@@ -219,7 +219,7 @@ What cwin does is hard to screenshot, because the claim is a negative: the targe
 your focus never moves. A single window cannot show that, so the demo records two panes at once.
 
 ```pwsh
-pwsh -NoProfile -File scriptsecord-demo.ps1
+pwsh -NoProfile -File scripts\record-demo.ps1 -KeepVideo
 ```
 
 The terminal you run it from becomes the left pane. It opens a throwaway-profile Chrome on a
@@ -237,6 +237,19 @@ Three tells are visible in every frame, and together they are the whole argument
 Nothing is staged: each command printed in the left pane is the command that then runs. The script
 also cleans up after itself, closing the browser by window handle rather than by process, for the
 reason in [DESIGN.md](DESIGN.md) about shared-process hosts.
+
+The capture is 1900 px wide and the GIF defaults to `-Width 1400`, which stays sharp on a
+high-DPI display: GitHub renders a README image at roughly 900 CSS pixels and doubles it.
+Pass `-Width 1900` for a 1:1 capture, or lower `-Fps` to buy the file size back. Keep it
+under about 5 MB, because most people who open a README are on a phone.
+
+`-KeepVideo` writes the intermediate `demo.mp4` beside the GIF, which is worth doing on the
+first take: retuning the width afterwards then costs one command instead of another 45
+seconds of your screen.
+
+```pwsh
+pwsh -NoProfile -File scripts\record-demo.ps1 -FromVideo docs\images\demo.mp4 -Width 1900
+```
 
 ## Design notes
 

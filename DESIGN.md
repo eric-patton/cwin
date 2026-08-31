@@ -162,7 +162,7 @@ It only decides *whether* taskkill fires against the PID at all. If any window i
 matches, the whole process dies.
 
 Close one window by posting `WM_CLOSE` (0x0010) to its handle, via `SendMessageTimeout` with
-`SMTO_ABORTIFHUNG` so a wedged app cannot block the caller. `scriptsecord-demo.ps1` does exactly
+`SMTO_ABORTIFHUNG` so a wedged app cannot block the caller. `scripts\record-demo.ps1` does exactly
 this to shut the browser it opened. If a process must be killed, first check with `cwin list`
 whether it owns more than one window.
 

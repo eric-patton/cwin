@@ -17,11 +17,26 @@
 .PARAMETER OutFile
   Where the GIF lands. Defaults to docs/images/demo.gif beside the repo.
 
+.PARAMETER Width
+  Output width in pixels. The capture is 1900 wide, so anything below that is a downscale and
+  costs text sharpness. 1400 is the default: crisp on a high-DPI display, where GitHub renders
+  a README image at roughly 900 CSS pixels and doubles it. Pass 1900 for a 1:1 capture.
+
+.PARAMETER Fps
+  Frames per second in the GIF. Lower it to buy file size back after raising -Width.
+
 .PARAMETER KeepVideo
-  Keep the intermediate .mp4 next to the GIF.
+  Keep the intermediate .mp4 next to the GIF. Worth passing on the first take, because
+  -FromVideo can then re-encode it at another width without occupying the screen again.
+
+.PARAMETER FromVideo
+  Skip recording and convert an existing capture. Use it to retune -Width or -Fps.
 
 .EXAMPLE
-  .\scripts\record-demo.ps1
+  .\scripts\record-demo.ps1 -KeepVideo
+
+.EXAMPLE
+  .\scripts\record-demo.ps1 -FromVideo docs\images\demo.mp4 -Width 1900
 
 .NOTES
   Needs ffmpeg and Google Chrome on PATH, and cwin resolvable as 'cwin'.
@@ -30,7 +45,10 @@
 [CmdletBinding()]
 param(
     [string]$OutFile,
-    [switch]$KeepVideo
+    [ValidateRange(320, 3840)][int]$Width = 1400,
+    [ValidateRange(4, 30)][int]$Fps = 10,
+    [switch]$KeepVideo,
+    [string]$FromVideo
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,8 +100,35 @@ function Type-Line {
     Write-Host ''
 }
 
+function Convert-ToGif {
+    param([string]$Source, [string]$Destination, [int]$W, [int]$F)
+    New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
+    # stats_mode=diff builds the palette from what actually changes between frames, which is what
+    # keeps the terminal text readable instead of spending the 256 colours on static background.
+    $filter = "fps=$F,scale=${W}:-1:flags=lanczos,split[a][b];" +
+              '[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3'
+    & ffmpeg -y -loglevel error -i $Source -vf $filter $Destination
+    if ($LASTEXITCODE -ne 0) { throw 'ffmpeg failed to convert the capture to a GIF.' }
+    $item = Get-Item $Destination
+    $size = [math]::Round($item.Length / 1MB, 2)
+    $dims = & ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 $Destination
+    Write-Host ''
+    Write-Host ("  Wrote {0}  {1}  {2} MB" -f $Destination, $dims, $size) -ForegroundColor Green
+    if ($size -gt 5) {
+        Write-Host '  Over 5 MB, which loads slowly on mobile. Re-run with a lower -Fps or -Width.' -ForegroundColor Yellow
+    }
+}
+
 Require-Command 'ffmpeg' 'Install it (winget install Gyan.FFmpeg) and reopen the terminal.'
 Require-Command 'cwin'   'Add cwin to PATH, or run this from a shell that resolves it.'
+
+# Re-encoding an existing capture needs none of the staging below.
+if ($FromVideo) {
+    if (-not (Test-Path $FromVideo)) { throw "No such capture: $FromVideo" }
+    if (-not $OutFile) { $OutFile = Join-Path $repo 'docs/images/demo.gif' }
+    Convert-ToGif -Source (Resolve-Path $FromVideo) -Destination $OutFile -W $Width -F $Fps
+    return
+}
 
 $chromeExe = @(
     "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
@@ -204,20 +249,15 @@ try {
     $ffmpeg.WaitForExit()
     $ffmpeg = $null
 
-    New-Item -ItemType Directory -Path (Split-Path -Parent $OutFile) -Force | Out-Null
-    Write-Host '  Converting to GIF...' -ForegroundColor DarkGray
-    $filter = 'fps=10,scale=900:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3'
-    & ffmpeg -y -loglevel error -i $video -vf $filter $OutFile
-    if ($LASTEXITCODE -ne 0) { throw 'ffmpeg failed to convert the capture to a GIF.' }
-
-    if ($KeepVideo) { Copy-Item $video (Join-Path (Split-Path -Parent $OutFile) 'demo.mp4') -Force }
-
-    $size = [math]::Round((Get-Item $OutFile).Length / 1MB, 2)
-    Write-Host ''
-    Write-Host ("  Wrote {0} ({1} MB)" -f $OutFile, $size) -ForegroundColor Green
-    if ($size -gt 5) {
-        Write-Host '  Over 5 MB. Lower the fps or the scale in $filter before committing it.' -ForegroundColor Yellow
+    # Copy the capture out before the finally block deletes the work directory, so -FromVideo
+    # can retune the width later without occupying the screen for another take.
+    if ($KeepVideo) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $OutFile) -Force | Out-Null
+        Copy-Item $video (Join-Path (Split-Path -Parent $OutFile) 'demo.mp4') -Force
     }
+
+    Write-Host '  Converting to GIF...' -ForegroundColor DarkGray
+    Convert-ToGif -Source $video -Destination $OutFile -W $Width -F $Fps
 }
 finally {
     if ($ffmpeg -and -not $ffmpeg.HasExited) { $ffmpeg.Kill() }
